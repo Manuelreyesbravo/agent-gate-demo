@@ -79,7 +79,7 @@ jobs:
       - name: Run the demo — the model proposes, PostgreSQL verifies
         run: |
           set -o pipefail
-          pip install -q 'psycopg[binary]'
+          pip install -q 'psycopg[binary]==3.3.6'
           DSN="host=$PWD/pg_agent_gate/.testcluster port=5499 dbname=gate_demo user=$(id -un)"
           {
             echo "# A small model operates PostgreSQL, verified by the engine"
