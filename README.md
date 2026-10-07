@@ -76,5 +76,5 @@ plumbing in seconds.
 
 ## License
 
-The harness and tasks are under the PostgreSQL License — see [LICENSE](LICENSE).
-Copyright 2026 Manuel Reyes Bravo. pg_agent_gate is a separate project with its own license.
+Apache License 2.0 — see [LICENSE](LICENSE). Copyright 2026 Manuel Reyes Bravo.
+pg_agent_gate is a separate project, also under the Apache License 2.0.

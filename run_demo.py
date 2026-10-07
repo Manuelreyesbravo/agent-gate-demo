@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2026 Manuel Reyes Bravo
-# SPDX-License-Identifier: PostgreSQL
+# SPDX-License-Identifier: Apache-2.0
 """A small model operates a real PostgreSQL database through pg_agent_gate --
 and the engine, not an LLM, approves every move.
 
