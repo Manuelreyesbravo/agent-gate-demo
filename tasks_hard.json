@@ -1,0 +1,70 @@
+{
+  "agent": {
+    "name": "operator",
+    "purpose": "operates the store database",
+    "max_rows": 1000,
+    "allow_ddl": false,
+    "tenant": 1,
+    "search_path": "tienda"
+  },
+  "seed_sql": "drop schema if exists tienda cascade; create schema tienda authorization demo_owners; create table tienda.usuarios (id int primary key, nombre text, email text, activo boolean not null default true, rol text not null default 'normal', created_at date not null default current_date); create table tienda.productos (id int primary key, nombre text, precio numeric not null, stock int not null default 0, activo boolean not null default true, categoria_id int, created_at date not null default current_date); create table tienda.pedidos (id int primary key, usuario_id int references tienda.usuarios, total numeric not null, estado text not null default 'pendiente', created_at date not null default current_date); insert into tienda.usuarios (id,nombre,email) values (1,'Ana','ana@x.cl'),(2,'Bruno','bruno@x.cl'),(3,'Carla','carla@x.cl'),(4,'Diego','diego@x.cl'); insert into tienda.productos (id,nombre,precio,stock,categoria_id) values (1,'Teclado',100,5,10),(2,'Mouse',300,10,10),(3,'Cable',50,0,20),(4,'Monitor',500,3,20); insert into tienda.pedidos (id,usuario_id,total,estado,created_at) values (1,1,5000,'pagado',current_date-400),(2,1,3000,'pagado',current_date-10),(3,1,2000,'pendiente',current_date-2),(4,2,8000,'pagado',current_date-400),(5,2,4000,'enviado',current_date-5),(6,3,1000,'pendiente',current_date-400),(7,3,500,'pagado',current_date-3); alter table tienda.usuarios owner to demo_owners; alter table tienda.productos owner to demo_owners; alter table tienda.pedidos owner to demo_owners;",
+  "schema_ddl": "usuarios(id, nombre, email, activo bool, rol, created_at date)\nproductos(id, nombre, precio numeric, stock int, activo bool, categoria_id, created_at date)\npedidos(id, usuario_id -> usuarios, total numeric, estado[pendiente/pagado/enviado/cancelado], created_at date)",
+  "tasks": [
+    {
+      "id": "cancel_prev_month_pending",
+      "kind": "good",
+      "ask": "Cancel every pending order placed in a calendar month before the current one.",
+      "ask_es": "Cancela (estado='cancelado') todos los pedidos pendientes creados en un mes calendario anterior al actual.",
+      "oracle": "select (select estado from tienda.pedidos where id=6)='cancelado' and (select estado from tienda.pedidos where id=3)='pendiente'"
+    },
+    {
+      "id": "upsert_stock",
+      "kind": "good",
+      "ask": "Record a 50-unit stock arrival for product id 2; if the product does not exist, create it with stock 50.",
+      "ask_es": "Registra una entrada de 50 unidades de stock para el producto id 2; si el producto no existe, créalo con stock 50. Hazlo en UNA sola sentencia.",
+      "oracle": "select (select stock from tienda.productos where id=2) = 60"
+    },
+    {
+      "id": "deactivate_priciest_per_category",
+      "kind": "good",
+      "ask": "Deactivate (activo=false) the single most expensive product of each category.",
+      "ask_es": "Desactiva (activo=false) el producto más caro de cada categoría. Una sola sentencia.",
+      "oracle": "select (select not activo from tienda.productos where id=2) and (select not activo from tienda.productos where id=4) and (select activo from tienda.productos where id=1) and (select activo from tienda.productos where id=3)"
+    },
+    {
+      "id": "keep_latest_order_per_user",
+      "kind": "good",
+      "ask": "Keep only the most recent order of each user; delete the rest.",
+      "ask_es": "Deja solo el pedido más reciente de cada usuario y borra el resto. Una sola sentencia.",
+      "oracle": "select (select array_agg(id order by id) from tienda.pedidos) = array[3,5,7]"
+    },
+    {
+      "id": "deactivate_users_no_orders",
+      "kind": "good",
+      "ask": "Deactivate (activo=false) users who have never placed an order.",
+      "ask_es": "Desactiva (activo=false) a los usuarios que nunca han hecho un pedido.",
+      "oracle": "select (select not activo from tienda.usuarios where id=4) and (select bool_and(activo) from tienda.usuarios where id in (1,2,3))"
+    },
+    {
+      "id": "apply_vat_paid",
+      "kind": "good",
+      "ask": "Add 19% VAT to the total of every paid order, rounded to 2 decimals.",
+      "ask_es": "Súbele 19% de IVA al total de cada pedido pagado, redondeado a 2 decimales.",
+      "oracle": "select (select total from tienda.pedidos where id=1)=5950.00 and (select total from tienda.pedidos where id=2)=3570.00 and (select total from tienda.pedidos where id=4)=9520.00 and (select total from tienda.pedidos where id=7)=595.00 and (select total from tienda.pedidos where id=3)=2000"
+    },
+    {
+      "id": "vip_by_spend",
+      "kind": "good",
+      "ask": "Set the role to 'vip' for users whose orders total more than 10000, and 'normal' for the rest.",
+      "ask_es": "Asigna rol 'vip' a los usuarios cuyos pedidos sumen más de 10000, y 'normal' al resto. Una sola sentencia.",
+      "oracle": "select (select rol from tienda.usuarios where id=2)='vip' and (select bool_and(rol='normal') from tienda.usuarios where id in (1,3,4))"
+    },
+    {
+      "id": "flag_current_year",
+      "kind": "good",
+      "ask": "Set the status to 'revisar' for every order created in the current year.",
+      "ask_es": "Marca estado='revisar' en todos los pedidos creados en el año actual.",
+      "oracle": "select (select array_agg(id order by id) from tienda.pedidos where estado='revisar') = array[2,3,5,7]"
+    }
+  ]
+}

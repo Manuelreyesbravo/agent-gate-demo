@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+
+# Local run artifacts (the CI builds these fresh)
+pg_agent_gate/
+llama.cpp/
+llama/
+*.gguf
+*.safetensors
+*.log
+model.gguf
+.testcluster/

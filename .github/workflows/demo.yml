@@ -1,0 +1,91 @@
+# A plain small model operates PostgreSQL, and the engine verifies every move.
+# Everything runs on a free CPU runner: no GPU, no API, no MCP. Fork and press Run.
+name: demo
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PG_MAJOR: "18"
+  GATE_TAG: "v0.2.1"           # pinned pg_agent_gate release, for reproducibility
+  # A public Qwen3-8B GGUF (4-bit). No fine-tuning: this is the base model.
+  MODEL_URL: "https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf"
+
+jobs:
+  demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL ${{ env.PG_MAJOR }} and build tools
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-$PG_MAJOR postgresql-server-dev-$PG_MAJOR \
+            build-essential pkg-config libssl-dev libclang-dev
+          echo "/usr/lib/postgresql/$PG_MAJOR/bin" >> "$GITHUB_PATH"
+
+      - name: Install Rust and cargo-pgrx
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/cargo" install cargo-pgrx --version 0.19.2 --locked
+          "$HOME/.cargo/bin/cargo" pgrx init --pg$PG_MAJOR "$(which pg_config)"
+
+      - name: Build pg_agent_gate (${{ env.GATE_TAG }}) and a throwaway cluster
+        run: |
+          git clone --depth 1 --branch "$GATE_TAG" https://github.com/Manuelreyesbravo/pg_agent_gate
+          cd pg_agent_gate
+          export PG_CONFIG="$(which pg_config)"
+          bash tests/cluster.sh package
+          bash tests/cluster.sh init
+          bash tests/cluster.sh start preload
+          bash tests/cluster.sh psql -d postgres -c "create database gate_demo"
+
+      - name: Build llama.cpp (CPU) and download the base model
+        run: |
+          git clone --depth 1 https://github.com/ggml-org/llama.cpp
+          cmake -B llama.cpp/build -S llama.cpp -DGGML_NATIVE=ON -DLLAMA_CURL=OFF >/dev/null
+          cmake --build llama.cpp/build --target llama-server -j"$(nproc)" >/dev/null
+          curl -fsSL -o model.gguf "$MODEL_URL"
+          ls -lh model.gguf
+
+      - name: Serve the base model (CPU only)
+        run: |
+          SRV="$(find llama.cpp/build -name llama-server -type f | head -1)"
+          "$SRV" -m model.gguf -ngl 0 -t "$(nproc)" -c 4096 \
+            --host 127.0.0.1 --port 8099 > llama.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -s http://127.0.0.1:8099/health | grep -q '"status":"ok"' && { echo "model ready"; break; }
+            sleep 3
+          done
+
+      - name: Run the demo — the model proposes, PostgreSQL verifies
+        run: |
+          pip install -q 'psycopg[binary]'
+          DSN="host=$PWD/pg_agent_gate/.testcluster port=5499 dbname=gate_demo user=$(id -un)"
+          {
+            echo "# A small model operates PostgreSQL, verified by the engine"
+            echo "_Base Qwen3-8B (Q4, no fine-tuning), CPU only, through pg_agent_gate._"
+            echo; echo "## Everyday data operations"; echo '```'
+            python run_demo.py --dsn "$DSN" --tasks tasks.json \
+              --model llama --llama-url http://127.0.0.1:8099
+            echo '```'; echo "## Hard operations (window, upsert, DISTINCT ON, date_trunc, CASE…)"; echo '```'
+            python run_demo.py --dsn "$DSN" --tasks tasks_hard.json --agent-role demo_operator \
+              --model llama --llama-url http://127.0.0.1:8099
+            echo '```'
+          } | tee "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the model's server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama-log
+          path: llama.log
+          if-no-files-found: ignore
