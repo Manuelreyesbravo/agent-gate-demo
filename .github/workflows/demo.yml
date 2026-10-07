@@ -8,6 +8,13 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+# Let a newer run supersede an in-progress Pages publish, but never cancel a deploy midway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 env:
   PG_MAJOR: "18"
@@ -92,6 +99,18 @@ jobs:
         if: always()
         run: cat summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
+      - name: Build the demo page from the report
+        if: github.ref == 'refs/heads/master'
+        run: |
+          python -m pip install -q markdown
+          python scripts/report_to_html.py summary.md _site/index.html
+
+      - name: Upload the Pages artifact
+        if: github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
       - name: Keep the model's server log
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,3 +118,16 @@ jobs:
           name: llama-log
           path: llama.log
           if-no-files-found: ignore
+
+  # Publish that one real report as the demo page. Only from the default branch, and only
+  # after the demo job passed -- so the link always shows a green, measured run.
+  deploy:
+    needs: demo
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
