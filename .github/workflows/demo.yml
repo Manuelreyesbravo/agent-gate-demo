@@ -7,9 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: read     # the deploy job widens this to pages: write / id-token: write for itself
 
 # Let a newer run supersede an in-progress Pages publish, but never cancel a deploy midway.
 concurrency:
@@ -19,15 +17,18 @@ concurrency:
 env:
   PG_MAJOR: "18"
   GATE_TAG: "v0.2.1"           # pinned pg_agent_gate release, for reproducibility
-  # A public Qwen3-8B GGUF (4-bit). No fine-tuning: this is the base model.
-  MODEL_URL: "https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf"
+  LLAMA_CPP_COMMIT: "bd4eeaa047006cb1fe71999fbd11134b5836e167"
+  # A public Qwen3-8B GGUF (4-bit), no fine-tuning: the base model. Pinned to a repo revision
+  # and verified by sha256, so the run is reproducible and the bytes cannot change under it.
+  MODEL_URL: "https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/a6adef130ffb23ddaf1a62fec9dced968c9bc482/Qwen3-8B-Q4_K_M.gguf"
+  MODEL_SHA256: "120307ba529eb2439d6c430d94104dabd578497bc7bfe7e322b5d9933b449bd4"
 
 jobs:
   demo:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install PostgreSQL ${{ env.PG_MAJOR }} and build tools
         run: |
@@ -55,12 +56,14 @@ jobs:
           bash tests/cluster.sh start preload
           bash tests/cluster.sh psql -d postgres -c "create database gate_demo"
 
-      - name: Build llama.cpp (CPU) and download the base model
+      - name: Build llama.cpp (CPU, pinned) and download the base model (sha256-verified)
         run: |
-          git clone --depth 1 https://github.com/ggml-org/llama.cpp
+          git clone https://github.com/ggml-org/llama.cpp
+          git -C llama.cpp checkout "$LLAMA_CPP_COMMIT"
           cmake -B llama.cpp/build -S llama.cpp -DGGML_NATIVE=ON -DLLAMA_CURL=OFF >/dev/null
           cmake --build llama.cpp/build --target llama-server -j"$(nproc)" >/dev/null
           curl -fsSL -o model.gguf "$MODEL_URL"
+          echo "$MODEL_SHA256  model.gguf" | sha256sum -c -
           ls -lh model.gguf
 
       - name: Serve the base model (CPU only)
@@ -109,13 +112,13 @@ jobs:
 
       - name: Upload the Pages artifact
         if: github.ref == 'refs/heads/master'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: _site
 
       - name: Keep the model's server log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: llama-log
           path: llama.log
@@ -127,9 +130,12 @@ jobs:
     needs: demo
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

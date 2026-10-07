@@ -230,7 +230,7 @@ PAGE = f"""<!doctype html>
   <p>pg_agent_gate isn't an MCP server you add in front of the database — it's the gate moved
     <i>into</i> PostgreSQL, so the layer that used to hold a connection and run whatever the
     model asked is the piece you <b>remove</b>. Two things you can run yourself in the gate's
-    repo prove it, re-checked in CI on every commit:</p>
+    repo prove it, re-checked in CI (the contrast on every commit, the transfer measurement weekly):</p>
   <ul class="engine">
     <li><code>make contrast</code> — the same <code>DROP TABLE</code> an ordinary connection
       runs (gone, irreversibly) is <b>refused by the gate, with the reason</b>; and where an

@@ -99,6 +99,13 @@ uv run --with 'psycopg[binary]' python run_demo.py \
 `--model stub` runs the whole harness with canned SQL (no model needed), to prove the
 plumbing in seconds.
 
+**Just the gate, no model, no install** — to see what the gate does to dangerous SQL (the
+with/without-gate demo, not this model harness), run the gate's own prebuilt image:
+
+```bash
+docker run --rm ghcr.io/manuelreyesbravo/pg_agent_gate-demo
+```
+
 ## How it works
 
 - **`run_demo.py`** — ~250 lines, `psycopg` + plain HTTP. For each task it asks the model,

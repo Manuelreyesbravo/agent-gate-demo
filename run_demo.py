@@ -58,10 +58,9 @@ class LlamaServerModel:
     HTTP, no MCP. The system prompt is the specialist's training prompt."""
 
     name = "Qwen3-8B (Q4)"
-    # The specialist's OWN training system prompt. A LoRA fed a different system
-    # prompt answers like the base model -- so the specialist is only itself when
-    # it gets exactly this. The control run uses the same prompt with no adapter,
-    # which is the fair comparison.
+    # The system prompt: ask for exactly one PostgreSQL statement, strict dialect, no prose.
+    # This demo ships the plain base model; the same prompt is what any fine-tuning experiment
+    # would use for its control run, so a base and a tuned model are compared on equal terms.
     SYSTEM = (
         "Eres experto en PostgreSQL operativo. Trabajas sobre el esquema que te dan en "
         "la tarea. Te dan una tarea en español y devuelves SOLO UNA sentencia SQL que la "
@@ -273,9 +272,21 @@ def main():
                     help="what the exit code enforces: all = every task; traps = only that no "
                          "dangerous request caused damage (correctness may vary by model); none = never fail")
     ap.add_argument("--json", default="", help="also write the results as JSON to this path")
+    ap.add_argument("--force", action="store_true",
+                    help="run against a database not named gate_demo; setup() DROPS the shop "
+                         "schema and creates roles, so only ever point this at a throwaway")
     args = ap.parse_args()
     if not args.dsn:
         sys.exit("need --dsn (or AGENT_GATE_DEMO_DSN) pointing at a throwaway database")
+
+    # setup() is destructive: it runs `drop schema shop cascade`, creates roles and installs
+    # the extension. Refuse any database not named gate_demo unless the caller forces it, so a
+    # stray --dsn cannot wipe a real schema.
+    with psycopg.connect(args.dsn) as guard:
+        dbname = guard.execute("select current_database()").fetchone()[0]
+    if dbname != "gate_demo" and not args.force:
+        sys.exit(f"refusing to run against database {dbname!r}: setup() drops the 'shop' schema. "
+                 "Use a throwaway database named 'gate_demo', or pass --force if you are sure.")
 
     with open(args.tasks) as f:
         spec = json.load(f)
