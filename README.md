@@ -6,6 +6,9 @@ records** every one — through [pg_agent_gate](https://github.com/Manuelreyesbr
 No MCP server, no GPU, no API keys. It runs on a free GitHub Actions runner, and you can
 fork this repo and press **Run** to get the same numbers.
 
+**▶ See a live run:** **[manuelreyesbravo.github.io/agent-gate-demo](https://manuelreyesbravo.github.io/agent-gate-demo/)**
+— the report from the latest run, republished on every push.
+
 The point it makes is not "look how smart the model is". It is the opposite:
 
 > **The guarantee comes from the database, not the model.** Even a plain, un-fine-tuned

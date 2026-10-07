@@ -19,6 +19,14 @@ hard = json.loads(pathlib.Path(sys.argv[2]).read_text()) if len(sys.argv) > 2 an
 OUT = pathlib.Path(sys.argv[3] if len(sys.argv) > 3 else "_site/index.html")
 today = datetime.date.today().isoformat()
 
+SITE = "https://manuelreyesbravo.github.io/agent-gate-demo/"
+DESCRIPTION = (
+    "A small, local, free language model proposes SQL and PostgreSQL verifies every "
+    "statement before it runs — agents propose, the engine decides. A reproducible demo of "
+    "pg_agent_gate: everyday operations correct, and every dangerous request stopped with no "
+    "damage. Fork it and run it."
+)
+
 
 def esc(s):
     return html.escape(str(s if s is not None else ""))
@@ -102,7 +110,20 @@ PAGE = f"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>agent-gate-demo — a small model operates PostgreSQL</title>
+<title>agent-gate-demo — a small model operates PostgreSQL, verified by the engine</title>
+<meta name="description" content="{esc(DESCRIPTION)}">
+<link rel="canonical" href="{SITE}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{SITE}">
+<meta property="og:title" content="A small model operates PostgreSQL — and the engine approves every move">
+<meta property="og:description" content="{esc(DESCRIPTION)}">
+<meta property="og:image" content="{SITE}og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="A small model operates PostgreSQL — and the engine approves every move">
+<meta name="twitter:description" content="{esc(DESCRIPTION)}">
+<meta name="twitter:image" content="{SITE}og.png">
 <style>
   :root {{
     color-scheme: light dark;
@@ -159,6 +180,10 @@ PAGE = f"""<!doctype html>
   .pill.muted {{ background:var(--muted-bg); color:var(--muted-fg); }}
   .legend {{ margin:1.8rem 0 0; color:var(--muted); font-size:13px; }}
   .legend b {{ color:var(--fg); }}
+  p code, li code {{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+    background:var(--muted-bg); color:var(--fg); padding:.05rem .32rem; border-radius:4px; font-size:.88em; }}
+  ul.engine {{ padding-left:1.1rem; }}
+  ul.engine li {{ margin:.5rem 0; }}
   footer {{ margin-top:2.6rem; padding-top:1.1rem; border-top:1px solid var(--line);
     color:var(--muted); font-size:13px; }}
   a {{ color:var(--accent); }}
@@ -192,6 +217,26 @@ PAGE = f"""<!doctype html>
     safe, whoever stopped it.
   </p>
 
+  <h2>What the engine does that an MCP server doesn't</h2>
+  <p>pg_agent_gate isn't an MCP server you add in front of the database — it's the gate moved
+    <i>into</i> PostgreSQL, so the layer that used to hold a connection and run whatever the
+    model asked is the piece you <b>remove</b>. Two things you can run yourself in the gate's
+    repo prove it, re-checked in CI on every commit:</p>
+  <ul class="engine">
+    <li><code>make contrast</code> — the same <code>DROP TABLE</code> an ordinary connection
+      runs (gone, irreversibly) is <b>refused by the gate, with the reason</b>; and where an
+      ordinary server hands back a bare row count, the gate returns the catalog the agent may
+      touch, every check with its verdict, and the exact before/after of a change — before
+      anything is kept.</li>
+    <li><code>make transfer</code> — what the JSON pipe costs. Over a native connection the
+      data keeps its types and binary; forced through MCP's JSON-RPC it does not: a 64-bit id
+      <code>9007199254740993</code> comes back <code>9007199254740992</code>, exact decimals
+      must travel as strings, and binary grows <b>+35%</b> as base64. <b>Same gate guarantee,
+      a fatter pipe.</b></li>
+  </ul>
+  <p>Both live in <a href="https://github.com/Manuelreyesbravo/pg_agent_gate">pg_agent_gate</a>,
+    the extension this demo runs on.</p>
+
   <footer>
     This page is one real run, republished on every push to the default branch — measured, not claimed.
     Fork and run it: <a href="https://github.com/Manuelreyesbravo/agent-gate-demo">agent-gate-demo</a>.
@@ -205,4 +250,14 @@ PAGE = f"""<!doctype html>
 
 OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text(PAGE)
-print(f"wrote {OUT}")
+
+# So search engines can find and crawl it: a sitemap pointing at the one page, and a
+# robots.txt that allows everything and names the sitemap.
+(OUT.parent / "sitemap.xml").write_text(
+    '<?xml version="1.0" encoding="UTF-8"?>\n'
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    f"  <url><loc>{SITE}</loc><lastmod>{today}</lastmod></url>\n"
+    "</urlset>\n"
+)
+(OUT.parent / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {SITE}sitemap.xml\n")
+print(f"wrote {OUT}, sitemap.xml, robots.txt")

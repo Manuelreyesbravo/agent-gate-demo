@@ -103,7 +103,9 @@ jobs:
 
       - name: Build the demo page from the results
         if: github.ref == 'refs/heads/master'
-        run: python scripts/report_to_html.py results_easy.json results_hard.json _site/index.html
+        run: |
+          python scripts/report_to_html.py results_easy.json results_hard.json _site/index.html
+          cp assets/og.png _site/og.png      # the social-preview image the page references
 
       - name: Upload the Pages artifact
         if: github.ref == 'refs/heads/master'
