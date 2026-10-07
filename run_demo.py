@@ -57,7 +57,7 @@ class LlamaServerModel:
     """Asks a llama.cpp server (OpenAI-compatible /v1/chat/completions). Plain
     HTTP, no MCP. The system prompt is the specialist's training prompt."""
 
-    name = "llama"
+    name = "Qwen3-8B (Q4)"
     # The specialist's OWN training system prompt. A LoRA fed a different system
     # prompt answers like the base model -- so the specialist is only itself when
     # it gets exactly this. The control run uses the same prompt with no adapter,
@@ -184,8 +184,13 @@ def run_task(su, agent_dsn, agent_role, task, model, schema_ddl):
                     result = gate_propose(cur, sql, task["ask"])
                 except psycopg.Error as e:
                     result = {"error": str(e).strip().splitlines()[0]}
+                # propose() records an attempt and returns a proposal id even when it
+                # REFUSES it (ok: false): the row is in the record either way. So the gate's
+                # verdict is `ok`, not the presence of an id -- a DROP or GRANT is refused at
+                # propose and must read "refused" here, not "allowed".
+                ok = isinstance(result, dict) and result.get("ok") is True
                 pid = result.get("proposal") if isinstance(result, dict) else None
-                if pid is not None:
+                if ok and pid is not None:
                     gate = "allowed"
                     try:
                         out = gate_commit(cur, pid)
@@ -198,7 +203,8 @@ def run_task(su, agent_dsn, agent_role, task, model, schema_ddl):
                         detail = str(e).strip().splitlines()[0]
                 else:
                     gate = "refused"
-                    detail = first_failure(result) or result.get("error", "refused")
+                    detail = first_failure(result) if isinstance(result, dict) else "refused"
+                    detail = detail or (result.get("error", "refused") if isinstance(result, dict) else "refused")
     # The oracle runs as a superuser: it reads the database itself, not what the
     # gate says about it.
     su.execute(task["oracle"])
@@ -212,7 +218,7 @@ def run_task(su, agent_dsn, agent_role, task, model, schema_ddl):
     return {
         "id": task["id"], "kind": task["kind"], "sql": sql, "proposed": proposed,
         "gate": gate, "committed": committed, "outcome": outcome, "oracle_ok": oracle_ok,
-        "success": success, "detail": detail,
+        "success": success, "detail": detail, "note": task.get("note", ""),
     }
 
 

@@ -58,10 +58,11 @@ def rows(results):
     for r in results:
         trap = " trap" if r["kind"] == "trap" else ""
         sql = esc(r["sql"]) or "<em>no statement</em>"
+        rownote = f'<div class="rownote">{esc(r["note"])}</div>' if r.get("note") else ""
         out.append(
             f'<tr class="row{trap}">'
             f'<td class="task">{esc(r["id"])}</td>'
-            f'<td class="sql"><code>{sql}</code></td>'
+            f'<td class="sql"><code>{sql}</code>{rownote}</td>'
             f'<td>{gate_cell(r)}</td>'
             f'<td>{commit_cell(r)}</td>'
             f'<td>{pill("pass" if r["oracle_ok"] else "fail", "ok" if r["oracle_ok"] else "bad")}</td>'
@@ -87,7 +88,8 @@ def card(big, label, tone):
     return f'<div class="card {tone}"><div class="big">{esc(big)}</div><div class="lbl">{esc(label)}</div></div>'
 
 
-model = esc(easy.get("model", "the base model"))
+# Name the model the way the READMEs do, not the server's internal id ("llama").
+MODEL_LABEL = "Qwen3-8B (Q4)"
 easy_good = [r for r in easy["results"] if r["kind"] == "good"]
 easy_traps = [r for r in easy["results"] if r["kind"] == "trap"]
 
@@ -176,6 +178,7 @@ PAGE = f"""<!doctype html>
   td.sql code {{ font:12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
     color:var(--codefg); background:var(--code); padding:.15rem .4rem; border-radius:5px;
     display:inline-block; max-width:34rem; overflow-wrap:anywhere; }}
+  .rownote {{ margin-top:.35rem; font-size:12px; line-height:1.5; color:var(--muted); max-width:34rem; }}
   tr.trap {{ box-shadow: inset 3px 0 0 var(--trap); }}
   tr.trap td.task::after {{ content:" trap"; color:var(--trap); font-weight:700; font-size:.7rem; }}
   .pill {{ display:inline-block; padding:.1rem .5rem; border-radius:999px; font-size:12px;
@@ -198,7 +201,7 @@ PAGE = f"""<!doctype html>
 <body>
 <main>
   <h1>A small model operates PostgreSQL — and the engine, not an LLM, approves every move</h1>
-  <p class="sub">Base {model} (4-bit, no fine-tuning), CPU only, no MCP — through
+  <p class="sub">Base {MODEL_LABEL}, no fine-tuning, CPU only, no MCP — through
     <a href="https://github.com/Manuelreyesbravo/pg_agent_gate">pg_agent_gate</a>.</p>
 
   <p class="lead">For each task the model proposes <b>one</b> SQL statement. It never runs the
