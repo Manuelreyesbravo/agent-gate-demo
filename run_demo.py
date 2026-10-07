@@ -6,7 +6,7 @@ and the engine, not an LLM, approves every move.
 
 No MCP, no GPU required for the plumbing: the model is an interface with two
 implementations. `stub` returns canned SQL (to prove the harness end to end);
-`llama` asks a llama.cpp server over plain HTTP (the real specialist).
+`llama` asks a llama.cpp server over plain HTTP (the base model this demo ships).
 
 For each task the model proposes ONE SQL statement; the agent submits it through
 the gate's verbs (propose -> commit); PostgreSQL verifies it against itself; and
@@ -55,7 +55,7 @@ class StubModel:
 
 class LlamaServerModel:
     """Asks a llama.cpp server (OpenAI-compatible /v1/chat/completions). Plain
-    HTTP, no MCP. The system prompt is the specialist's training prompt."""
+    HTTP, no MCP. The system prompt asks for exactly one PostgreSQL statement."""
 
     name = "Qwen3-8B (Q4)"
     # The system prompt: ask for exactly one PostgreSQL statement, strict dialect, no prose.
@@ -74,9 +74,9 @@ class LlamaServerModel:
 
     def propose_sql(self, task, schema_ddl):
         ask = task.get("ask_es") or task["ask"]
-        # /no_think turns off Qwen3's thinking: same decoding for the specialist
-        # (trained non-thinking) and the base control, and it keeps CPU latency
-        # sane. The answer must be a single statement, so no reasoning preamble.
+        # /no_think turns off Qwen3's thinking: the same decoding whether the model is the
+        # base or a fine-tuned one, and it keeps CPU latency sane. The answer must be a single
+        # statement, so no reasoning preamble.
         prompt = f"Esquema:\n{schema_ddl}\n\nTarea: {ask}\n\nResponde solo con el SQL. /no_think"
         body = json.dumps({
             "messages": [

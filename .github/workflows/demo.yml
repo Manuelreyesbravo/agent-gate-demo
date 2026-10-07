@@ -41,7 +41,7 @@ jobs:
 
       - name: Install Rust and cargo-pgrx
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.98.0
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           "$HOME/.cargo/bin/cargo" install cargo-pgrx --version 0.19.2 --locked
           "$HOME/.cargo/bin/cargo" pgrx init --pg$PG_MAJOR "$(which pg_config)"
