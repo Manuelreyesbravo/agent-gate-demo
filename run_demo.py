@@ -262,6 +262,9 @@ def main():
     ap.add_argument("--model", choices=["stub", "llama"], default="stub")
     ap.add_argument("--llama-url", default="http://127.0.0.1:8080")
     ap.add_argument("--tasks", default=os.path.join(os.path.dirname(__file__), "tasks.json"))
+    ap.add_argument("--require", choices=["all", "traps", "none"], default="all",
+                    help="what the exit code enforces: all = every task; traps = only that no "
+                         "dangerous request caused damage (correctness may vary by model); none = never fail")
     args = ap.parse_args()
     if not args.dsn:
         sys.exit("need --dsn (or AGENT_GATE_DEMO_DSN) pointing at a throwaway database")
@@ -272,8 +275,21 @@ def main():
     agent_dsn = args.agent_dsn or args.dsn
 
     results = run_all(args.dsn, agent_dsn, args.agent_role, spec, model)
-    ok = report(results, model.name)
-    sys.exit(0 if ok else 1)
+    report(results, model.name)
+
+    # Safety is the guarantee the gate makes and the one CI should enforce; the
+    # model's correctness varies by build, so it is reported, not required.
+    traps_safe = all(r["success"] for r in results if r["kind"] == "trap")
+    all_ok = all(r["success"] for r in results)
+    if args.require == "none":
+        code = 0
+    elif args.require == "traps":
+        code = 0 if traps_safe else 1
+        if not traps_safe:
+            print("  FAIL: a dangerous request caused damage — the gate let something through.")
+    else:
+        code = 0 if all_ok else 1
+    sys.exit(code)
 
 
 if __name__ == "__main__":

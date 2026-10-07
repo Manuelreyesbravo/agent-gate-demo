@@ -19,16 +19,24 @@ statement; it goes through the gate (`propose` → `commit`); PostgreSQL verifie
 itself; and a superuser **oracle** then checks whether the goal was actually met — or, for a
 trap, whether the database stayed safe. The answer is approved by the code, not claimed.
 
-Measured here with **Qwen3-8B (Q4, no fine-tuning)** on a CPU-only runner:
+Measured by the workflow in this repo — **Qwen3-8B (Q4, no fine-tuning)**, CPU only:
 
 | | result |
 |---|---|
 | Everyday data operations (`tasks.json`) | **10 / 10** correct, verified by PostgreSQL |
-| Hard operations — upsert, window, `DISTINCT ON`, `date_trunc`, `CASE`… (`tasks_hard.json`) | **8 / 8** |
-| Dangerous requests (wipe the table, drop it, cross-tenant write, self-grant superuser) | **0** caused any damage |
+| Hard operations — upsert, window, `DISTINCT ON`, `date_trunc`, `CASE`… (`tasks_hard.json`) | **most correct — 6 to 8 of 8**, depending on the model build |
+| Dangerous requests (wipe the table, drop it, cross-tenant write, self-grant superuser) | **0 ever cause damage** |
 
-Every dangerous request is turned away by a *different* mechanism — a row limit, DDL refused,
-row-level security, a privilege check — so nothing depends on the model behaving.
+The first and last rows are the point, and they are the ones that do not move. A plain base
+model handles everyday operations perfectly and most hard ones; where it gets a hard query
+*wrong*, the oracle catches it as wrong — it is never quietly accepted. And **every dangerous
+request is turned away, every time, by the database itself** — by a row limit, by DDL being
+refused, by row-level security, by a privilege check — whatever the model does.
+
+**Correctness depends on the model; safety does not.** That is the whole argument: you do not
+have to trust the model, because PostgreSQL checks it. And the workflow enforces this — it
+**fails the build** if any dangerous request ever causes damage. The guarantee is checked on
+every run, not asserted in prose.
 
 > We also tried fine-tuning the 8B to beat the base on the hard set (three times, with an
 > oracle-verified corpus). It never won — the base Qwen3-8B is already strong at PostgreSQL,

@@ -68,19 +68,29 @@ jobs:
 
       - name: Run the demo — the model proposes, PostgreSQL verifies
         run: |
+          set -o pipefail
           pip install -q 'psycopg[binary]'
           DSN="host=$PWD/pg_agent_gate/.testcluster port=5499 dbname=gate_demo user=$(id -un)"
           {
             echo "# A small model operates PostgreSQL, verified by the engine"
             echo "_Base Qwen3-8B (Q4, no fine-tuning), CPU only, through pg_agent_gate._"
-            echo; echo "## Everyday data operations"; echo '```'
-            python run_demo.py --dsn "$DSN" --tasks tasks.json \
-              --model llama --llama-url http://127.0.0.1:8099
-            echo '```'; echo "## Hard operations (window, upsert, DISTINCT ON, date_trunc, CASE…)"; echo '```'
-            python run_demo.py --dsn "$DSN" --tasks tasks_hard.json --agent-role demo_operator \
-              --model llama --llama-url http://127.0.0.1:8099
-            echo '```'
-          } | tee "$GITHUB_STEP_SUMMARY"
+          } > summary.md
+          # Everyday operations + the traps. THIS FAILS THE BUILD if any dangerous
+          # request causes damage — the one thing the gate guarantees, CI-enforced.
+          { echo; echo "## Everyday operations + safety (the build fails if the gate ever lets damage through)"; echo '```'; } >> summary.md
+          python run_demo.py --dsn "$DSN" --tasks tasks.json --require traps \
+            --model llama --llama-url http://127.0.0.1:8099 | tee -a summary.md
+          echo '```' >> summary.md
+          # Hard operations: the model's correctness varies by build, so it is
+          # reported, never required.
+          { echo; echo "## Hard operations — reported, not required (window, upsert, DISTINCT ON, date_trunc, CASE…)"; echo '```'; } >> summary.md
+          python run_demo.py --dsn "$DSN" --tasks tasks_hard.json --agent-role demo_operator --require none \
+            --model llama --llama-url http://127.0.0.1:8099 | tee -a summary.md
+          echo '```' >> summary.md
+
+      - name: Post the report
+        if: always()
+        run: cat summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
       - name: Keep the model's server log
         if: always()
