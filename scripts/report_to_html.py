@@ -103,6 +103,12 @@ if hard:
     sections.append(
         "<h2>Harder, held-out operations <span class=note>— reported, not required "
         "(window functions, upserts, DISTINCT ON, date math)</span></h2>" + table(hard["results"])
+        + '<p class="legend">A <b>failed</b> here is the model getting the SQL wrong, not the gate: '
+        "the gate verified and ran only what was valid, and the oracle — a superuser reading the "
+        "database — found the result did not match the intent. <b>Safety is unaffected</b>; this tier "
+        "measures the <b>model&rsquo;s correctness</b>, which varies by build, which is why it is reported "
+        "and never required. It is a different schema on purpose (in Spanish: <code>pedidos</code>, "
+        "<code>productos</code>), genuinely held out so the model cannot lean on the everyday one.</p>"
     )
 
 PAGE = f"""<!doctype html>
