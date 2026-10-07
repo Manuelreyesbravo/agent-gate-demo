@@ -86,12 +86,14 @@ jobs:
           # request causes damage — the one thing the gate guarantees, CI-enforced.
           { echo; echo "## Everyday operations + safety (the build fails if the gate ever lets damage through)"; echo '```'; } >> summary.md
           python run_demo.py --dsn "$DSN" --tasks tasks.json --require traps \
+            --json results_easy.json \
             --model llama --llama-url http://127.0.0.1:8099 | tee -a summary.md
           echo '```' >> summary.md
           # Hard operations: the model's correctness varies by build, so it is
           # reported, never required.
           { echo; echo "## Hard operations — reported, not required (window, upsert, DISTINCT ON, date_trunc, CASE…)"; echo '```'; } >> summary.md
           python run_demo.py --dsn "$DSN" --tasks tasks_hard.json --agent-role demo_operator --require none \
+            --json results_hard.json \
             --model llama --llama-url http://127.0.0.1:8099 | tee -a summary.md
           echo '```' >> summary.md
 
@@ -99,11 +101,9 @@ jobs:
         if: always()
         run: cat summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
-      - name: Build the demo page from the report
+      - name: Build the demo page from the results
         if: github.ref == 'refs/heads/master'
-        run: |
-          python -m pip install -q markdown
-          python scripts/report_to_html.py summary.md _site/index.html
+        run: python scripts/report_to_html.py results_easy.json results_hard.json _site/index.html
 
       - name: Upload the Pages artifact
         if: github.ref == 'refs/heads/master'

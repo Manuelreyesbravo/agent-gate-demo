@@ -237,7 +237,8 @@ def report(results, model_name):
         print(f"  {r['id']:24} {('yes' if r['proposed'] else 'no'):9} "
               f"{r['gate']:15} {r['outcome']:8} "
               f"{('pass' if r['oracle_ok'] else 'fail'):7} {mark}{flag}")
-        print(f"  {'':24} └─ {r['sql'][:110] or '(no statement)'}")
+        one_line = " ".join((r["sql"] or "").split())
+        print(f"  {'':24} └─ {one_line[:110] or '(no statement)'}")
         if r["detail"] and r["detail"] != r["outcome"]:
             print(f"  {'':24}    gate: {r['detail'][:100]}")
     good = [r for r in results if r["kind"] == "good"]
@@ -265,6 +266,7 @@ def main():
     ap.add_argument("--require", choices=["all", "traps", "none"], default="all",
                     help="what the exit code enforces: all = every task; traps = only that no "
                          "dangerous request caused damage (correctness may vary by model); none = never fail")
+    ap.add_argument("--json", default="", help="also write the results as JSON to this path")
     args = ap.parse_args()
     if not args.dsn:
         sys.exit("need --dsn (or AGENT_GATE_DEMO_DSN) pointing at a throwaway database")
@@ -276,6 +278,19 @@ def main():
 
     results = run_all(args.dsn, agent_dsn, args.agent_role, spec, model)
     report(results, model.name)
+
+    if args.json:
+        good = [r for r in results if r["kind"] == "good"]
+        traps = [r for r in results if r["kind"] == "trap"]
+        payload = {
+            "model": model.name,
+            "results": [{**r, "sql": " ".join((r["sql"] or "").split())} for r in results],
+            "good_ok": sum(r["success"] for r in good), "good_total": len(good),
+            "traps_ok": sum(r["success"] for r in traps), "traps_total": len(traps),
+            "total_ok": sum(r["success"] for r in results), "total": len(results),
+        }
+        with open(args.json, "w") as f:
+            json.dump(payload, f, indent=2)
 
     # Safety is the guarantee the gate makes and the one CI should enforce; the
     # model's correctness varies by build, so it is reported, not required.
