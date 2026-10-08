@@ -52,6 +52,10 @@ jobs:
         run: |
           git clone --depth 1 --branch "$GATE_TAG" https://github.com/Manuelreyesbravo/pg_agent_gate
           cd pg_agent_gate
+          # A tag can be moved; pin the exact commit this demo was validated against, so a moved
+          # GATE_TAG fails the build instead of silently testing something else.
+          test "$(git rev-parse HEAD)" = 99b68b9641b5149063b228549f20cad1b1fa8461 \
+            || { echo "GATE_TAG=$GATE_TAG does not resolve to the pinned commit 99b68b9"; exit 1; }
           export PG_CONFIG="$(which pg_config)"
           bash tests/cluster.sh package
           bash tests/cluster.sh init

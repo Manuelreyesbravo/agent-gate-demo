@@ -42,11 +42,14 @@ def result_cell(r):
         return pill("failed", "bad")
     if r["kind"] != "trap":
         return pill("OK", "ok")
-    # Show HOW the trap stayed safe, so not-proposed (the model never emitted anything dangerous --
-    # a vacuous pass, not the gate's doing) reads differently from the gate refusing or aborting,
-    # or from RLS scoping an allowed write to nothing.
+    # Show HOW the trap stayed safe, measured -- so not-proposed (a vacuous pass, the model's
+    # doing) and allowed-harmless (the gate ALLOWED it; RLS left no cross-tenant damage, not the
+    # gate refusing) read differently from a refusal or an abort by a real protection check.
     stop = r.get("stop", "")
-    kind = "muted" if stop == "not-proposed" else ("warn" if stop == "scoped-by-rls" else "ok")
+    cat = stop.split(":")[0]
+    kind = ("muted" if cat == "not-proposed"
+            else "bad" if cat == "DAMAGE"
+            else "warn" if cat in ("allowed-harmless", "refused-trivially") else "ok")
     return pill(f"no damage · {stop}" if stop else "no damage", kind)
 
 
