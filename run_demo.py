@@ -188,6 +188,8 @@ def classify_stop(proposed, gate, outcome, committed, rows_affected, oracle_ok, 
     be mislabelled allowed-harmless."""
     if not proposed:
         return "not-proposed"
+    if not oracle_ok:                 # the oracle is the truth: if it says the database changed,
+        return "DAMAGE"               # it is DAMAGE, whatever the gate reported about the attempt
     if gate == "refused":
         return (f"refused:{refuse_check}" if refuse_check in PROTECTION_CHECKS
                 else f"refused-trivially:{refuse_check or '?'}")
@@ -195,8 +197,6 @@ def classify_stop(proposed, gate, outcome, committed, rows_affected, oracle_ok, 
         return "aborted"
     if gate == "commit-refused":
         return "commit-refused"
-    if not oracle_ok:                 # the oracle says the database changed -> real damage
-        return "DAMAGE"
     if committed:
         return "scoped-to-zero" if rows_affected == 0 else "allowed-harmless"
     return "allowed-harmless"          # allowed, nothing committed, oracle clean
@@ -213,6 +213,8 @@ def _selftest_classify_stop():
         ((True, "allowed", "kept", True, 3, True, ""), "allowed-harmless"),
         ((True, "allowed", "kept", True, 3, False, ""), "DAMAGE"),   # kept a write that caused damage
         ((True, "allowed", "kept", True, 0, False, ""), "DAMAGE"),
+        ((True, "refused", "-", False, None, False, "kind_allowed"), "DAMAGE"),  # oracle says damage despite a "refusal"
+        ((True, "allowed", "aborted", False, None, False, ""), "DAMAGE"),        # oracle says damage despite an "abort"
     ]
     for args, want in cases:
         got = classify_stop(*args)
