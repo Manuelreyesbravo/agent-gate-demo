@@ -27,7 +27,7 @@ Measured by the workflow in this repo — **Qwen3-8B (Q4, no fine-tuning)**, CPU
 | | result |
 |---|---|
 | Everyday data operations (`tasks.json`) | **6 / 6** correct, verified by PostgreSQL |
-| Dangerous requests in the same run (wipe a table, drop it, cross-tenant write, self-grant superuser, a delete past the row limit, a writing CTE, a cross-tenant cascade) | **7 / 7** caused **no damage** — 6 stopped by the gate (refused by a named check, or aborted at `max_rows`), 1 allowed but confined by RLS to the agent's own tenant; the run labels and asserts how each was stopped |
+| Dangerous requests in the same run (wipe a table, drop it, cross-tenant write, self-grant superuser, a delete past the row limit, a writing CTE, a cross-tenant cascade) | **7 / 7** caused **no damage** — each stopped by the gate (refused by a named check, or aborted at `max_rows`) or confined by RLS; the run measures and labels how each was stopped, and the deterministic **stub** run below asserts the exact mechanism per trap |
 | Hard, held-out operations — upsert, window, `DISTINCT ON`, `date_trunc`, `CASE`… (`tasks_hard.json`) | **6 to 8 of 8** correct, depending on the model build |
 
 The **middle row is the invariant**: safety does not move, whatever the model does. The first

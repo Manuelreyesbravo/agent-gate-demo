@@ -6,12 +6,14 @@
 #   python scripts/report_to_html.py results_easy.json results_hard.json _site/index.html
 #
 # Each JSON is what run_demo.py --json writes: {model, results:[...], good_ok, good_total,
-# traps_ok, traps_total, total_ok, total}. A result is {id, kind, proposed, gate, committed,
-# outcome, oracle_ok, success, detail, sql, stop}. stop (traps only) is how it stayed safe:
-# refused | aborted | scoped-by-rls | commit-refused | not-proposed.
+# traps_ok, traps_total, total_ok, total, traps_by_stop}. A result is {id, kind, proposed, gate,
+# committed, outcome, rows_affected, refuse_check, oracle_ok, success, detail, sql, stop}.
+# stop (traps only), measured, is how it stayed safe: refused:<check> | refused-trivially:<check>
+# | aborted | scoped-to-zero | allowed-harmless | commit-refused | not-proposed.
 import datetime
 import html
 import json
+import os
 import pathlib
 import sys
 
@@ -19,6 +21,14 @@ easy = json.loads(pathlib.Path(sys.argv[1]).read_text())
 hard = json.loads(pathlib.Path(sys.argv[2]).read_text()) if len(sys.argv) > 2 and sys.argv[2] else None
 OUT = pathlib.Path(sys.argv[3] if len(sys.argv) > 3 else "_site/index.html")
 today = datetime.date.today().isoformat()
+
+# Stamp the exact source this page was built from, so anyone can check which version they see
+# (GitHub sets these in Actions; empty locally). Ends the "is this the old cached page?" question.
+SHA = os.environ.get("GITHUB_SHA", "")
+RUN_ID = os.environ.get("GITHUB_RUN_ID", "")
+_server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
+_repo = os.environ.get("GITHUB_REPOSITORY", "Manuelreyesbravo/agent-gate-demo")
+RUN_URL = f"{_server}/{_repo}/actions/runs/{RUN_ID}" if RUN_ID else ""
 
 SITE = "https://manuelreyesbravo.github.io/agent-gate-demo/"
 DESCRIPTION = (
@@ -124,6 +134,16 @@ if hard:
         "<code>productos</code>), genuinely held out so the model cannot lean on the everyday one.</p>"
     )
 
+build_line = ""
+meta_stamp = ""
+if SHA:
+    _c = esc(SHA[:12])
+    build_line = f' · built from commit <code>{_c}</code>'
+    meta_stamp = f'\n<meta name="agent-gate-demo:commit" content="{esc(SHA)}">'
+    if RUN_URL:
+        build_line += f' (<a href="{RUN_URL}">run {esc(RUN_ID)}</a>)'
+        meta_stamp += f'\n<meta name="agent-gate-demo:run" content="{esc(RUN_ID)}">'
+
 PAGE = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -131,7 +151,7 @@ PAGE = f"""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agent-gate-demo — a small model operates PostgreSQL, verified by the engine</title>
 <meta name="description" content="{esc(DESCRIPTION)}">
-<link rel="canonical" href="{SITE}">
+<link rel="canonical" href="{SITE}">{meta_stamp}
 <meta property="og:type" content="website">
 <meta property="og:url" content="{SITE}">
 <meta property="og:title" content="A small model operates PostgreSQL — and the engine approves every move">
@@ -261,7 +281,7 @@ PAGE = f"""<!doctype html>
     This page is one real run, republished on every push to the default branch — measured, not claimed.
     Fork and run it: <a href="https://github.com/Manuelreyesbravo/agent-gate-demo">agent-gate-demo</a>.
     The gate it uses: <a href="https://github.com/Manuelreyesbravo/pg_agent_gate">pg_agent_gate</a>.
-    Generated {today}.
+    Generated {today}{build_line}.
   </footer>
 </main>
 </body>
