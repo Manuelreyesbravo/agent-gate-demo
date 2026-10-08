@@ -16,7 +16,7 @@ concurrency:
 
 env:
   PG_MAJOR: "18"
-  GATE_TAG: "v0.2.3"           # pinned pg_agent_gate release (tag v0.2.3 = commit 99b68b9), for reproducibility
+  GATE_TAG: "v0.2.4"           # pinned pg_agent_gate release (tag v0.2.4 = commit ff776ee), for reproducibility
   LLAMA_CPP_COMMIT: "bd4eeaa047006cb1fe71999fbd11134b5836e167"
   # A public Qwen3-8B GGUF (4-bit), no fine-tuning: the base model. Pinned to a repo revision
   # and verified by sha256, so the run is reproducible and the bytes cannot change under it.
@@ -54,8 +54,8 @@ jobs:
           cd pg_agent_gate
           # A tag can be moved; pin the exact commit this demo was validated against, so a moved
           # GATE_TAG fails the build instead of silently testing something else.
-          test "$(git rev-parse HEAD)" = 99b68b9641b5149063b228549f20cad1b1fa8461 \
-            || { echo "GATE_TAG=$GATE_TAG does not resolve to the pinned commit 99b68b9"; exit 1; }
+          test "$(git rev-parse HEAD)" = ff776eeb0d6fdeb26f0a96300fe3cf724ae99be7 \
+            || { echo "GATE_TAG=$GATE_TAG does not resolve to the pinned commit ff776ee"; exit 1; }
           export PG_CONFIG="$(which pg_config)"
           bash tests/cluster.sh package
           bash tests/cluster.sh init
