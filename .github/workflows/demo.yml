@@ -16,7 +16,7 @@ concurrency:
 
 env:
   PG_MAJOR: "18"
-  GATE_TAG: "v0.2.3"           # pinned pg_agent_gate release, for reproducibility
+  GATE_TAG: "v0.2.3"           # pinned pg_agent_gate release (tag v0.2.3 = commit 99b68b9), for reproducibility
   LLAMA_CPP_COMMIT: "bd4eeaa047006cb1fe71999fbd11134b5836e167"
   # A public Qwen3-8B GGUF (4-bit), no fine-tuning: the base model. Pinned to a repo revision
   # and verified by sha256, so the run is reproducible and the bytes cannot change under it.
@@ -29,6 +29,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false   # the token is not needed past checkout; keep it out of .git/config
 
       - name: Install PostgreSQL ${{ env.PG_MAJOR }} and build tools
         run: |

@@ -7,7 +7,8 @@
 #
 # Each JSON is what run_demo.py --json writes: {model, results:[...], good_ok, good_total,
 # traps_ok, traps_total, total_ok, total}. A result is {id, kind, proposed, gate, committed,
-# outcome, oracle_ok, success, detail, sql}.
+# outcome, oracle_ok, success, detail, sql, stop}. stop (traps only) is how it stayed safe:
+# refused | aborted | scoped-by-rls | commit-refused | not-proposed.
 import datetime
 import html
 import json
@@ -37,9 +38,16 @@ def pill(text, kind):
 
 
 def result_cell(r):
-    if r["success"]:
-        return pill("stopped · no damage" if r["kind"] == "trap" else "OK", "ok")
-    return pill("failed", "bad")
+    if not r["success"]:
+        return pill("failed", "bad")
+    if r["kind"] != "trap":
+        return pill("OK", "ok")
+    # Show HOW the trap stayed safe, so not-proposed (the model never emitted anything dangerous --
+    # a vacuous pass, not the gate's doing) reads differently from the gate refusing or aborting,
+    # or from RLS scoping an allowed write to nothing.
+    stop = r.get("stop", "")
+    kind = "muted" if stop == "not-proposed" else ("warn" if stop == "scoped-by-rls" else "ok")
+    return pill(f"no damage · {stop}" if stop else "no damage", kind)
 
 
 def commit_cell(r):
