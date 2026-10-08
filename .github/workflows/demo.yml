@@ -16,7 +16,7 @@ concurrency:
 
 env:
   PG_MAJOR: "18"
-  GATE_TAG: "v0.2.1"           # pinned pg_agent_gate release, for reproducibility
+  GATE_TAG: "v0.2.3"           # pinned pg_agent_gate release, for reproducibility
   LLAMA_CPP_COMMIT: "bd4eeaa047006cb1fe71999fbd11134b5836e167"
   # A public Qwen3-8B GGUF (4-bit), no fine-tuning: the base model. Pinned to a repo revision
   # and verified by sha256, so the run is reproducible and the bytes cannot change under it.
