@@ -23,6 +23,7 @@ import sys
 import urllib.request
 
 import psycopg
+import psycopg.sql
 
 
 # --------------------------------------------------------------------------- #
@@ -162,6 +163,13 @@ def setup(su, spec, agent_role):
     su.execute(
         "select agent_gate.register_agent(%s, %s::regrole, %s, %s, %s)",
         (a["name"], agent_role, a["purpose"], a["max_rows"], a["allow_ddl"]))
+    # The agent connects with the --dsn's password (run_task passes user= only). On a
+    # server that checks passwords -- the ygg-pg image does, scram by default -- the
+    # agent role needs one; under trust auth there is none and nothing is set.
+    pw = su.connection.info.password
+    if pw:
+        su.execute(psycopg.sql.SQL("alter role {} password {}").format(
+            psycopg.sql.Identifier(agent_role), psycopg.sql.Literal(pw)))
     su.connection.commit()
 
 

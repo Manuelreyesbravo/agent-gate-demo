@@ -1,0 +1,115 @@
+# The same model, the same tasks, the same superuser oracle -- connected four ways:
+# native (no MCP), native-loop (no MCP, agentic), gated-mcp (the same gate over MCP),
+# stock-mcp (a popular Postgres MCP, same privileges, no gate). On a clean runner, so the
+# times are citable. Fork and press Run; every number comes from compare-results.json.
+name: compare
+
+on:
+  workflow_dispatch:
+    inputs:
+      repeat:
+        description: "runs per task and arm"
+        default: "3"
+  push:
+    paths: ["compare/**", ".github/workflows/compare.yml"]
+
+permissions:
+  contents: read
+
+env:
+  PG_MAJOR: "18"
+  GATE_TAG: "v0.3.0"
+  GATE_COMMIT: "61740ea80430e226fc38c15ad6824f5c7af54846"
+  LLAMA_CPP_COMMIT: "bd4eeaa047006cb1fe71999fbd11134b5836e167"
+  MODEL_URL: "https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/a6adef130ffb23ddaf1a62fec9dced968c9bc482/Qwen3-8B-Q4_K_M.gguf"
+  MODEL_SHA256: "120307ba529eb2439d6c430d94104dabd578497bc7bfe7e322b5d9933b449bd4"
+  STOCK_MCP_IMAGE: "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b"
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Install PostgreSQL ${{ env.PG_MAJOR }} and build tools
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-$PG_MAJOR postgresql-server-dev-$PG_MAJOR \
+            build-essential pkg-config libssl-dev libclang-dev
+          echo "/usr/lib/postgresql/$PG_MAJOR/bin" >> "$GITHUB_PATH"
+
+      - name: Install Rust, cargo-pgrx and bun
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.98.0
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/cargo" install cargo-pgrx --version 0.19.2 --locked
+          "$HOME/.cargo/bin/cargo" pgrx init --pg$PG_MAJOR "$(which pg_config)"
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Build pg_agent_gate ${{ env.GATE_TAG }} (pinned commit) and a throwaway cluster
+        run: |
+          git clone --depth 1 --branch "$GATE_TAG" https://github.com/Manuelreyesbravo/pg_agent_gate
+          cd pg_agent_gate
+          test "$(git rev-parse HEAD)" = "$GATE_COMMIT" \
+            || { echo "GATE_TAG=$GATE_TAG does not resolve to $GATE_COMMIT"; exit 1; }
+          export PG_CONFIG="$(which pg_config)"
+          cargo pgrx package --pg-config "$PG_CONFIG" --no-default-features --features pg$PG_MAJOR
+          bash tests/cluster.sh init
+          bash tests/cluster.sh start preload
+          bash tests/cluster.sh psql -d postgres -c "create database gate_demo"
+          (cd gated-mcp && bun install --frozen-lockfile)
+
+      - name: Pull the stock MCP baseline (pinned by digest)
+        run: docker pull "$STOCK_MCP_IMAGE"
+
+      - name: Build llama.cpp (CPU, pinned) and download the base model (sha256-verified)
+        run: |
+          git clone https://github.com/ggml-org/llama.cpp
+          git -C llama.cpp checkout "$LLAMA_CPP_COMMIT"
+          cmake -B llama.cpp/build -S llama.cpp -DGGML_NATIVE=ON -DLLAMA_CURL=OFF >/dev/null
+          cmake --build llama.cpp/build --target llama-server -j"$(nproc)" >/dev/null
+          curl -fsSL -o model.gguf "$MODEL_URL"
+          echo "$MODEL_SHA256  model.gguf" | sha256sum -c -
+
+      - name: Serve the base model (CPU only, tool calls on)
+        run: |
+          SRV="$(find llama.cpp/build -name llama-server -type f | head -1)"
+          "$SRV" -m model.gguf -ngl 0 -t "$(nproc)" -c 4096 --jinja \
+            --host 127.0.0.1 --port 8099 > llama.log 2>&1 &
+          for i in $(seq 1 90); do
+            curl -s http://127.0.0.1:8099/health | grep -q '"status":"ok"' && { echo "model ready"; break; }
+            sleep 3
+          done
+
+      - name: Compare -- the model, the tasks and the oracle fixed; only the connection varies
+        run: |
+          set -o pipefail
+          pip install -q 'psycopg[binary]==3.3.6'
+          python compare/run_compare.py \
+            --dsn "postgresql://$(id -un)@127.0.0.1:5499/gate_demo" \
+            --llama-url http://127.0.0.1:8099 \
+            --gated-mcp-dir pg_agent_gate/gated-mcp \
+            --container docker \
+            --repeat "${{ github.event.inputs.repeat || '1' }}" \
+            --json compare-results.json | tee table.md
+          {
+            echo "# The same gate, with and without MCP"
+            echo "_Base Qwen3-8B (Q4), CPU only, pg_agent_gate $GATE_TAG, PostgreSQL $PG_MAJOR._"
+            echo
+            cat table.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: compare-results
+          path: |
+            compare-results.json
+            llama.log
+          if-no-files-found: ignore
