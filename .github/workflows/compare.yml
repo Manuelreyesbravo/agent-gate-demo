@@ -18,8 +18,8 @@ permissions:
 
 env:
   PG_MAJOR: "18"
-  GATE_TAG: "v0.4.0"
-  GATE_COMMIT: "33d0acbfcab845ad113d122d58bf5d74e5084d2a"
+  GATE_TAG: "v0.4.1"
+  GATE_COMMIT: "3b26653a27ef73ffe3156f12018bf21482bd38b4"
   LLAMA_CPP_COMMIT: "bd4eeaa047006cb1fe71999fbd11134b5836e167"
   MODEL_URL: "https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/a6adef130ffb23ddaf1a62fec9dced968c9bc482/Qwen3-8B-Q4_K_M.gguf"
   MODEL_SHA256: "120307ba529eb2439d6c430d94104dabd578497bc7bfe7e322b5d9933b449bd4"

@@ -28,7 +28,7 @@ compare/quickstart.sh --byo "https://your-mcp/mcp"      # add your own MCP serve
 Every piece is published and pinned: PostgreSQL with the gate from
 `ghcr.io/latamflows/ygg-pg:0.3.3` (UBI, password required), the model server from
 llama.cpp's own image (by digest), the base Qwen3-8B GGUF checked by sha256, gated-mcp
-from the `pg_agent_gate` v0.4.0 tag, and `postgres-mcp` by digest. It needs podman or
+from the `pg_agent_gate` v0.4.1 tag, and `postgres-mcp` by digest. It needs podman or
 docker, git, curl, bun and uv; it binds only to 127.0.0.1 and removes its containers
 when it ends. On CPU the MCP arms are the slow part: allow most of an hour.
 
