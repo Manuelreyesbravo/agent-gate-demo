@@ -16,7 +16,23 @@ PostgreSQL changes:
 - Success and damage are decided only by the superuser oracle in `../tasks.json`, never
   by what an arm or the gate reports.
 
-## Run it
+## Run it: one command, nothing to compile
+
+```sh
+compare/quickstart.sh                 # CPU; writes compare-results.json
+REPEAT=3 compare/quickstart.sh        # 3 runs per task
+LLAMA_URL=http://127.0.0.1:8080 compare/quickstart.sh   # a model server you already run
+compare/quickstart.sh --byo "https://your-mcp/mcp"      # add your own MCP server as an arm
+```
+
+Every piece is published and pinned: PostgreSQL with the gate from
+`ghcr.io/latamflows/ygg-pg:0.3.3` (UBI, password required), the model server from
+llama.cpp's own image (by digest), the base Qwen3-8B GGUF checked by sha256, gated-mcp
+from the `pg_agent_gate` v0.4.0 tag, and `postgres-mcp` by digest. It needs podman or
+docker, git, curl, bun and uv; it binds only to 127.0.0.1 and removes its containers
+when it ends. On CPU the MCP arms are the slow part: allow most of an hour.
+
+### Or bring your own pieces
 
 A throwaway database named `gate_demo` with `pg_agent_gate` preloaded, a llama.cpp
 server started with `--jinja` (tool calls), bun for gated-mcp, and podman or docker for
