@@ -95,11 +95,22 @@ class StdioClient(_Client):
         self._send({"jsonrpc": "2.0", "method": method})
 
     def close(self):
-        self.p.terminate()
+        # EOF on stdin is how a stdio MCP server is told to stop. A signal alone is not
+        # enough when the server runs in a container: it reaches the container CLI, the
+        # server may be PID 1 there (which ignores SIGTERM), and killing the CLI leaves
+        # the container running (measured: 8 left behind by repeated runs).
         try:
-            self.p.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.p.kill()
+            self.p.stdin.close()
+        except OSError:
+            pass
+        for stop, grace in ((None, 3), (self.p.terminate, 10), (self.p.kill, 10)):
+            if stop:
+                stop()
+            try:
+                self.p.wait(timeout=grace)
+                return
+            except subprocess.TimeoutExpired:
+                continue
 
 
 class HttpClient(_Client):

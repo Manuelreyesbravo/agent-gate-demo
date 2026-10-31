@@ -53,7 +53,8 @@ MAX_TOKENS = 512
 # baseline cannot change under the comparison. Swap podman for docker with --container.
 STOCK_IMAGE = ("docker.io/crystaldba/postgres-mcp@sha256:"
                "dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b")
-STOCK_MCP = ("{container} run -i --rm --network host -e DATABASE_URI={plain_dsn} "
+# --init: the server must not be PID 1, which ignores the stop signal.
+STOCK_MCP = ("{container} run -i --rm --init --network host -e DATABASE_URI={plain_dsn} "
              + STOCK_IMAGE + " --access-mode=unrestricted")
 
 # The MCP arms get the same persona and the same task text as the native arm; they
@@ -426,7 +427,29 @@ def main():
     dsns = {"agent": role_dsn(args.dsn, AGENT_ROLE), "plain": role_dsn(args.dsn, PLAIN_ROLE)}
     llm = LLM(args.llama_url, args.lora_off)
 
-    results, tool_bytes, procs = [], {}, []
+    results, tool_bytes, procs, clients = [], {}, [], []
+    try:
+        run_arms(args, arms, spec, dsns, llm, results, tool_bytes, procs, clients)
+    finally:
+        # Whatever happened, no server outlives the run.
+        for client in clients:
+            client.close()
+        for p in procs:
+            p.terminate()
+            try:
+                p.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                p.kill()
+
+    rows = summarize(results, arms, tool_bytes)
+    print_table(rows)
+    with open(args.json, "w") as f:
+        json.dump({"tasks": os.path.basename(args.tasks), "summary": rows,
+                   "results": results}, f, indent=2)
+    print(f"\nwrote {args.json}", file=sys.stderr)
+
+
+def run_arms(args, arms, spec, dsns, llm, results, tool_bytes, procs, clients):
     with psycopg.connect(args.dsn, autocommit=False) as conn, conn.cursor() as su:
         prepare(su, spec, args.dsn)
         for arm in arms:
@@ -439,6 +462,8 @@ def main():
                 target = (args.stock_mcp if arm == "stock-mcp" else args.byo).format(
                     plain_dsn=dsns["plain"], agent_dsn=dsns["agent"], container=args.container)
                 client = connect(target)
+            if client:
+                clients.append(client)
             oa = None
             if client:
                 oa = as_openai_tools(client.tools())
@@ -462,16 +487,8 @@ def main():
                       f"tools={rec['tool_calls']} ptok={rec['prompt_tokens']} "
                       f"{rec['seconds']}s {rec['error'][:60]}", file=sys.stderr)
             if client:
+                clients.remove(client)
                 client.close()
-    for p in procs:
-        p.terminate()
-
-    rows = summarize(results, arms, tool_bytes)
-    print_table(rows)
-    with open(args.json, "w") as f:
-        json.dump({"tasks": os.path.basename(args.tasks), "summary": rows,
-                   "results": results}, f, indent=2)
-    print(f"\nwrote {args.json}", file=sys.stderr)
 
 
 if __name__ == "__main__":
