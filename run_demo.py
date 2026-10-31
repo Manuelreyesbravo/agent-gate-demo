@@ -180,6 +180,14 @@ def role_exists(su, name):
 
 def reset_world(su, spec):
     su.execute(spec["seed_sql"])
+    # Every task is a world of its own, so the agent starts each with its whole write budget
+    # (pg_agent_gate 0.4.0+: rows per window, counted across commits), the way an administrator
+    # gives it back after a review. Without this the budget spent on one task aborts the next.
+    # A gate without a budget has nothing to reset.
+    su.execute("select exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
+               "where n.nspname = 'agent_gate' and p.proname = 'reset_budget')")
+    if su.fetchone()[0]:
+        su.execute("select agent_gate.reset_budget(%s)", (spec["agent"]["name"],))
     su.connection.commit()
 
 
