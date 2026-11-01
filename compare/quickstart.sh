@@ -23,7 +23,7 @@ for tool in git curl bun; do
     command -v "$tool" >/dev/null || { echo "need $tool"; exit 1; }
 done
 
-YGG_IMAGE=${YGG_IMAGE:-ghcr.io/latamflows/ygg-pg:0.3.3}
+YGG_IMAGE=${YGG_IMAGE:-ghcr.io/latamflows/ygg-pg@sha256:e9265995356e990ff8b0161a8b1aebfa83c6a4b383885f6ee4b8d7fbdc90e0e1}  # 0.3.4: pg_agent_gate 0.4.1
 LLAMA_IMAGE=ghcr.io/ggml-org/llama.cpp@sha256:20c4196fc08b459a34ef78aaa05b101333b2fac687e30ec99f37b3c9dc071b44  # server-b11854
 MODEL_URL="https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/a6adef130ffb23ddaf1a62fec9dced968c9bc482/Qwen3-8B-Q4_K_M.gguf"
 MODEL_SHA256=120307ba529eb2439d6c430d94104dabd578497bc7bfe7e322b5d9933b449bd4
